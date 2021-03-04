@@ -3,9 +3,8 @@ package main
 import "github.com/krislamntnu/Single-Go-Elevator.git/elevio"
 
 const (
-	numFloors           = 4
-	numButtons          = 3 // Cab, HallUp and HallDown
-	doorOpenDurationSec = 3
+	numFloors  = 4
+	numButtons = 3
 )
 
 type elevatorBehaviour int
@@ -18,7 +17,7 @@ const (
 
 type elevator struct {
 	floor     int
-	dir       elevio.MotorDirection
+	dir       elevio.MotorDirection // Just up/down
 	requests  [numFloors][numButtons]bool
-	behaviour elevatorBehaviour
+	behaviour elevatorBehaviour // State on which det fsm switches
 }

@@ -19,8 +19,7 @@ func main() {
 
 	// Initialize and start the elevator
 	var elev elevator
-	//startFloor := elevio.GetFloor()
-	startFloor := -1
+	startFloor := elevio.GetFloor()
 	if startFloor == -1 {
 		elev = elevator{floor: -1, dir: elevio.MdDown, behaviour: ebMoving}
 	} else {
@@ -28,43 +27,83 @@ func main() {
 	}
 	elevio.SetMotorDirection(elev.dir)
 
-	drvButtons := make(chan elevio.ButtonEvent)
-	drvFloors := make(chan int)
-	drvObstr := make(chan bool)
-	drvStop := make(chan bool)
+	buttonEvents := make(chan elevio.ButtonEvent)
+	hitFloorEvents := make(chan int)
+	openDoor := make(chan bool)
+	doorClosed := make(chan bool)
 
-	go elevio.PollButtons(drvButtons)
-	go elevio.PollFloorSensor(drvFloors)
-	go elevio.PollObstructionSwitch(drvObstr)
-	go elevio.PollStopButton(drvStop)
+	go elevio.PollButtons(buttonEvents)
+	go elevio.PollFloorSensor(hitFloorEvents)
+	go doorFsm(doorClosed, openDoor)
 
 	for {
 		select {
-		case a := <-drvButtons:
-			fmt.Printf("%+v\n", a)
-			// elevio.SetButtonLamp(a.Button, a.Floor, true)
-			elev.requests[a.Floor][a.Button] = true
-			setAllLights(elev)
+		case button := <-buttonEvents:
+			fmt.Printf("ButtonEvent: %+v\n", button)
 
-		case a := <-drvFloors:
-			fmt.Printf("%+v\n", a)
-			if a == numFloors-1 {
-				elev.dir = elevio.MdDown
-			} else if a == 0 {
-				elev.dir = elevio.MdUp
+			switch elev.behaviour {
+			case ebDoorOpen:
+				if elev.floor == button.Floor {
+					openDoor <- true
+				} else {
+					elev.requests[button.Floor][button.Button] = true
+				}
+
+			case ebMoving:
+				elev.requests[button.Floor][button.Button] = true
+
+			case ebIdle:
+				if elev.floor == button.Floor {
+					openDoor <- true
+					elev.behaviour = ebDoorOpen
+				} else {
+					elev.requests[button.Floor][button.Button] = true
+					elev.dir = requestsChooseDirection(elev)
+					elevio.SetMotorDirection(elev.dir)
+					elev.behaviour = ebMoving
+				}
+
+			default:
+
 			}
-			elevio.SetMotorDirection(elev.dir)
-			elev.floor = a
-			elev = requestsClearCurrentFloor(elev)
 			setAllLights(elev)
 
-		case a := <-drvObstr:
-			fmt.Printf("%+v\n", a)
-			if a {
-				elevio.SetMotorDirection(elevio.MdStop)
-			} else {
+		case newFloor := <-hitFloorEvents:
+			fmt.Printf("New floor: %+v\n", newFloor)
+
+			elev.floor = newFloor
+			elevio.SetFloorIndicator(newFloor)
+
+			switch elev.behaviour {
+			case ebMoving:
+				if requestsShouldStop(elev) {
+					elevio.SetMotorDirection(elevio.MdStop)
+					openDoor <- true
+					elev = requestsClearCurrentFloor(elev)
+					setAllLights(elev)
+					elev.behaviour = ebDoorOpen
+				}
+			default:
+			}
+
+		case <-doorClosed:
+			fmt.Printf("Door closed\n")
+
+			switch elev.behaviour {
+			case ebDoorOpen:
+				elev.dir = requestsChooseDirection(elev)
 				elevio.SetMotorDirection(elev.dir)
+
+				if elev.dir == elevio.MdStop {
+					elev.behaviour = ebIdle
+				} else {
+					elev.behaviour = ebMoving
+				}
+
+			default:
+
 			}
 		}
+
 	}
 }
