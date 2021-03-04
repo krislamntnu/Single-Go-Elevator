@@ -3,17 +3,30 @@ package main
 import (
 	"fmt"
 
-	"./elevio"
+	"github.com/krislamntnu/Single-Go-Elevator.git/elevio"
 )
 
+func setAllLights(elev elevator) {
+	for floor := 0; floor < numFloors; floor++ {
+		for btn := elevio.ButtonType(0); btn < numButtons; btn++ {
+			elevio.SetButtonLamp(btn, floor, elev.requests[floor][btn])
+		}
+	}
+}
+
 func main() {
-
-	numFloors := 4
-
 	elevio.Init("localhost:15657", numFloors)
 
-	var d elevio.MotorDirection = elevio.MD_Up
-	//elevio.SetMotorDirection(d)
+	// Initialize and start the elevator
+	var elev elevator
+	//startFloor := elevio.GetFloor()
+	startFloor := -1
+	if startFloor == -1 {
+		elev = elevator{floor: -1, dir: elevio.MdDown, behaviour: ebMoving}
+	} else {
+		elev = elevator{floor: startFloor, dir: elevio.MdStop, behaviour: ebIdle}
+	}
+	elevio.SetMotorDirection(elev.dir)
 
 	drvButtons := make(chan elevio.ButtonEvent)
 	drvFloors := make(chan int)
@@ -29,31 +42,28 @@ func main() {
 		select {
 		case a := <-drvButtons:
 			fmt.Printf("%+v\n", a)
-			elevio.SetButtonLamp(a.Button, a.Floor, true)
+			// elevio.SetButtonLamp(a.Button, a.Floor, true)
+			elev.requests[a.Floor][a.Button] = true
+			setAllLights(elev)
 
 		case a := <-drvFloors:
 			fmt.Printf("%+v\n", a)
 			if a == numFloors-1 {
-				d = elevio.MD_Down
+				elev.dir = elevio.MdDown
 			} else if a == 0 {
-				d = elevio.MD_Up
+				elev.dir = elevio.MdUp
 			}
-			elevio.SetMotorDirection(d)
+			elevio.SetMotorDirection(elev.dir)
+			elev.floor = a
+			elev = requestsClearCurrentFloor(elev)
+			setAllLights(elev)
 
 		case a := <-drvObstr:
 			fmt.Printf("%+v\n", a)
 			if a {
-				elevio.SetMotorDirection(elevio.MD_Stop)
+				elevio.SetMotorDirection(elevio.MdStop)
 			} else {
-				elevio.SetMotorDirection(d)
-			}
-
-		case a := <-drvStop:
-			fmt.Printf("%+v\n", a)
-			for f := 0; f < numFloors; f++ {
-				for b := elevio.ButtonType(0); b < 3; b++ {
-					elevio.SetButtonLamp(b, f, false)
-				}
+				elevio.SetMotorDirection(elev.dir)
 			}
 		}
 	}

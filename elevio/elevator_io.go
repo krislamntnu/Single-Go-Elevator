@@ -17,17 +17,17 @@ var _conn net.Conn
 type MotorDirection int
 
 const (
-	MD_Up   MotorDirection = 1
-	MD_Down                = -1
-	MD_Stop                = 0
+	MdUp   MotorDirection = 1
+	MdDown MotorDirection = -1
+	MdStop MotorDirection = 0
 )
 
 type ButtonType int
 
 const (
-	BT_HallUp   ButtonType = 0
-	BT_HallDown            = 1
-	BT_Cab                 = 2
+	BtHallUp   ButtonType = 0
+	BtHallDown ButtonType = 1
+	BtCab      ButtonType = 2
 )
 
 type ButtonEvent struct {
@@ -100,7 +100,7 @@ func PollFloorSensor(receiver chan<- int) {
 	prev := -1
 	for {
 		time.Sleep(_pollRate)
-		v := getFloor()
+		v := GetFloor()
 		if v != prev && v != -1 {
 			receiver <- v
 		}
@@ -132,16 +132,7 @@ func PollObstructionSwitch(receiver chan<- bool) {
 	}
 }
 
-func getButton(button ButtonType, floor int) bool {
-	_mtx.Lock()
-	defer _mtx.Unlock()
-	_conn.Write([]byte{6, byte(button), byte(floor), 0})
-	var buf [4]byte
-	_conn.Read(buf[:])
-	return toBool(buf[1])
-}
-
-func getFloor() int {
+func GetFloor() int {
 	_mtx.Lock()
 	defer _mtx.Unlock()
 	_conn.Write([]byte{7, 0, 0, 0})
@@ -152,6 +143,15 @@ func getFloor() int {
 	} else {
 		return -1
 	}
+}
+
+func getButton(button ButtonType, floor int) bool {
+	_mtx.Lock()
+	defer _mtx.Unlock()
+	_conn.Write([]byte{6, byte(button), byte(floor), 0})
+	var buf [4]byte
+	_conn.Read(buf[:])
+	return toBool(buf[1])
 }
 
 func getStop() bool {
