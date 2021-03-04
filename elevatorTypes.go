@@ -17,7 +17,7 @@ const (
 
 type elevator struct {
 	floor     int
-	dir       elevio.MotorDirection // Just up/down
+	dir       elevio.MotorDirection // Just up or down
 	requests  [numFloors][numButtons]bool
 	behaviour elevatorBehaviour // State on which det fsm switches
 }
