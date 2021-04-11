@@ -24,24 +24,55 @@ func doorFsm(doorClosed chan<- bool, openDoor <-chan bool) {
 	obstructionEvents := make(chan bool)
 	go elevio.PollObstructionSwitch(obstructionEvents)
 
+	timeout := time.NewTimer(doorOpenDurationSec * time.Second)
+
+	// Solves the special case with obstruction while the door is closed.
+	obstructionSwitch := false
+
+	// Finite state machine
 	for {
 		select {
-		case shouldOpen := <-openDoor:
-			if shouldOpen {
-				fmt.Println("Door open")
-				elevio.SetDoorOpenLamp(true)
-				state = dsOpen
-
-				// For now a sleep will do. Fixing a real timer later
-				time.Sleep(doorOpenDurationSec * time.Second)
+		case <-timeout.C:
+			switch state {
+			case dsOpen:
 				elevio.SetDoorOpenLamp(false)
 				doorClosed <- true
 				state = dsClosed
+			default:
 			}
+
+		case <-openDoor:
+			fmt.Println("Door open")
+			switch state {
+			case dsClosed:
+				elevio.SetDoorOpenLamp(true)
+				if !obstructionSwitch {
+					timeout.Reset(doorOpenDurationSec * time.Second)
+					state = dsOpen
+				} else {
+					state = dsObstructed
+				}
+			case dsOpen:
+				timeout.Reset(doorOpenDurationSec * time.Second)
+			default:
+			}
+
 		case obstruction := <-obstructionEvents:
-			// Some nonesense. Fix later
-			if state == dsClosed {
-				fmt.Printf("%+v\n", obstruction)
+			fmt.Println("Obstruction:", obstruction)
+			switch state {
+			case dsOpen:
+				if obstruction {
+					state = dsObstructed
+					obstructionSwitch = true
+				}
+			case dsObstructed:
+				if !obstruction {
+					state = dsOpen
+					timeout.Reset(doorOpenDurationSec * time.Second)
+					obstructionSwitch = false
+				}
+			case dsClosed:
+				obstructionSwitch = obstruction
 			}
 		}
 	}
