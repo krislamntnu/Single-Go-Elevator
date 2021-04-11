@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 
 	"github.com/krislamntnu/Single-Go-Elevator.git/elevio"
@@ -15,9 +16,16 @@ func setAllLights(elev elevator) {
 }
 
 func main() {
-	elevio.Init("localhost:15657", numFloors)
+	// Choose a port number to communicate with either hardware or simulator.
+	// Example: go run . -port=50000
+	var ioPort string
+	flag.StringVar(&ioPort, "port", "15657", "port to connect to elevator")
+	flag.Parse()
 
-	// Initialize and start the elevator
+	// Connect to elevator hardware/simulator.
+	elevio.Init(fmt.Sprint("localhost:", ioPort), numFloors)
+
+	// Initialize and start the elevator.
 	var elev elevator
 	startFloor := elevio.GetFloor()
 	if startFloor == -1 {
@@ -62,9 +70,7 @@ func main() {
 					elevio.SetMotorDirection(elev.dir)
 					elev.behaviour = ebMoving
 				}
-
 			default:
-
 			}
 			setAllLights(elev)
 
@@ -99,9 +105,7 @@ func main() {
 				} else {
 					elev.behaviour = ebMoving
 				}
-
 			default:
-
 			}
 		}
 	}
